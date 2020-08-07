@@ -9,6 +9,7 @@ package org.postgresql.core.v3;
 import static org.postgresql.util.internal.Nullness.castNonNull;
 
 import org.postgresql.PGProperty;
+import org.postgresql.copy.CopyData;
 import org.postgresql.copy.CopyIn;
 import org.postgresql.copy.CopyOperation;
 import org.postgresql.copy.CopyOut;
@@ -891,7 +892,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       pgStream.sendChar(0);
       pgStream.flush();
 
-      return castNonNull(processCopyResults(null, true));
+      return castNonNull(processCopyResults(null, true, null));
       // expect a CopyInResponse or CopyOutResponse to our query above
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when starting copy"),
@@ -948,7 +949,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
           pgStream.flush();
           do {
             try {
-              processCopyResults(op, true); // discard rest of input
+              processCopyResults(op, true, null); // discard rest of input
             } catch (SQLException se) { // expected error response to failing copy
               errors++;
               if (error != null) {
@@ -1014,7 +1015,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       pgStream.flush();
 
       do {
-        processCopyResults(op, true);
+        processCopyResults(op, true, null);
       } while (hasLock(op));
       return op.getHandledRowCount();
     } catch (IOException ioe) {
@@ -1100,16 +1101,17 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    *
    * @param op the copy operation presumably currently holding lock on this connection
    * @param block whether to block waiting for input
+   * @param maxLength
    * @throws SQLException on any failure
    */
-  synchronized void readFromCopy(CopyOperationImpl op, boolean block) throws SQLException {
+  synchronized void readFromCopy(CopyOperationImpl op, boolean block, @Nullable Integer maxLength) throws SQLException {
     if (!hasLock(op)) {
       throw new PSQLException(GT.tr("Tried to read from inactive copy"),
           PSQLState.OBJECT_NOT_IN_STATE);
     }
 
     try {
-      processCopyResults(op, block); // expect a call to handleCopydata() to store the data
+      processCopyResults(op, block, maxLength); // expect a call to handleCopydata() to store the data
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when reading from copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
@@ -1123,12 +1125,14 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * on pgStream or QueryExecutor are not allowed in a method after calling this!
    *
    * @param block whether to block waiting for input
+   * @param maxLength
    * @return CopyIn when COPY FROM STDIN starts; CopyOut when COPY TO STDOUT starts; null when copy
    *         ends; otherwise, the operation given as parameter.
    * @throws SQLException in case of misuse
    * @throws IOException from the underlying connection
    */
-  @Nullable CopyOperationImpl processCopyResults(@Nullable CopyOperationImpl op, boolean block)
+  @Nullable CopyOperationImpl processCopyResults(@Nullable CopyOperationImpl op, boolean block,
+      @Nullable Integer maxLength)
       throws SQLException, IOException {
 
     /*
@@ -1266,6 +1270,13 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
             assert len > 0 : "Copy Data length must be greater than 4";
 
+            boolean isPartial = false;
+            int originalLength = -1;
+            if (maxLength != null && len > maxLength) {
+              isPartial = true;
+              originalLength = len;
+              len = maxLength;
+            }
             byte[] buf = pgStream.receive(len);
             if (op == null) {
               error = new PSQLException(GT.tr("Got CopyData without an active copy operation"),
@@ -1275,7 +1286,11 @@ public class QueryExecutorImpl extends QueryExecutorBase {
                   GT.tr("Unexpected copydata from server for {0}", op.getClass().getName()),
                   PSQLState.COMMUNICATION_ERROR);
             } else {
-              op.handleCopydata(buf);
+              if (isPartial) {
+                op.handleCopydata(CopyData.partial(buf, originalLength));
+              } else {
+                op.handleCopydata(CopyData.complete(buf));
+              }
             }
             endReceiving = true;
             break;

@@ -7,6 +7,7 @@ package org.postgresql.core.v3;
 
 import static org.postgresql.util.internal.Nullness.castNonNull;
 
+import org.postgresql.copy.CopyData;
 import org.postgresql.copy.CopyOperation;
 import org.postgresql.util.GT;
 import org.postgresql.util.PSQLException;
@@ -70,7 +71,7 @@ public abstract class CopyOperationImpl implements CopyOperation {
    * @param data data that was receive by copy protocol
    * @throws PSQLException if some internal problem occurs
    */
-  protected abstract void handleCopydata(byte[] data) throws PSQLException;
+  protected abstract void handleCopydata(CopyData data) throws PSQLException;
 
   public long getHandledRowCount() {
     return handledRowCount;
