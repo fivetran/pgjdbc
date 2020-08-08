@@ -30,15 +30,7 @@ public interface CopyOut extends CopyOperation {
    */
   @Nullable CopyData readCopyData(boolean block, @Nullable Integer maxSize) throws SQLException;
 
-  default byte @Nullable [] readFromCopy() throws SQLException {
-    CopyData copyData = readCopyData();
-    if (copyData == null) return null;
-    return copyData.getData();
-  }
+  byte @Nullable [] readFromCopy() throws SQLException;
 
-  default byte @Nullable [] readFromCopy(boolean block) throws SQLException {
-    CopyData copyData = readCopyData(block, null);
-    if (copyData == null) return null;
-    return copyData.getData();
-  }
+  byte @Nullable [] readFromCopy(boolean block) throws SQLException;
 }

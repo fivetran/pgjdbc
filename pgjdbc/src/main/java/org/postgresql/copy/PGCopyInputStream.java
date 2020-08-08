@@ -103,6 +103,16 @@ public class PGCopyInputStream extends InputStream implements CopyOut {
     return got == 0 && data == null ? -1 : got;
   }
 
+  @Override
+  public @Nullable CopyData readCopyData() throws SQLException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public @Nullable CopyData readCopyData(boolean block, @Nullable Integer maxSize) throws SQLException {
+    throw new UnsupportedOperationException();
+  }
+
   public byte @Nullable [] readFromCopy() throws SQLException {
     byte[] result = buf;
     try {

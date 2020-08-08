@@ -41,6 +41,18 @@ public class CopyOutImpl extends CopyOperationImpl implements CopyOut {
     return currentDataRow;
   }
 
+  @Override
+  public byte @Nullable [] readFromCopy() throws SQLException {
+    return readFromCopy(true);
+  }
+
+  @Override
+  public byte @Nullable [] readFromCopy(boolean block) throws SQLException {
+    CopyData copyData = readCopyData(block, null);
+    if (copyData == null) return null;
+    return copyData.getData();
+  }
+
   protected void handleCopydata(CopyData data) {
     currentDataRow = data;
   }
