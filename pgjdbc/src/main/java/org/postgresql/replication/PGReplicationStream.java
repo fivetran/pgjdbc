@@ -144,4 +144,6 @@ public interface PGReplicationStream
    * @throws SQLException when some internal exception occurs during end streaming
    */
   void close() throws SQLException;
+
+  boolean messageIsPartial();
 }

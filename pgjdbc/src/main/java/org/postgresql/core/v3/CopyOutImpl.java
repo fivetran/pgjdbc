@@ -5,6 +5,7 @@
 
 package org.postgresql.core.v3;
 
+import org.postgresql.copy.CopyData;
 import org.postgresql.copy.CopyOut;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,20 +27,33 @@ import java.sql.SQLException;
  * &lt;-returned: byte array of data received from server or null at end.</p>
  */
 public class CopyOutImpl extends CopyOperationImpl implements CopyOut {
-  private byte @Nullable [] currentDataRow;
+  @Nullable private CopyData currentDataRow;
 
+  @Override
+  public @Nullable CopyData readCopyData() throws SQLException {
+    return readCopyData(true, null);
+  }
+
+  @Override
+  public @Nullable CopyData readCopyData(boolean block, Integer maxSize) throws SQLException {
+    currentDataRow = null;
+    getQueryExecutor().readFromCopy(this, block, null);
+    return currentDataRow;
+  }
+
+  @Override
   public byte @Nullable [] readFromCopy() throws SQLException {
     return readFromCopy(true);
   }
 
   @Override
   public byte @Nullable [] readFromCopy(boolean block) throws SQLException {
-    currentDataRow = null;
-    getQueryExecutor().readFromCopy(this, block);
-    return currentDataRow;
+    CopyData copyData = readCopyData(block, null);
+    if (copyData == null) return null;
+    return copyData.getData();
   }
 
-  protected void handleCopydata(byte[] data) {
+  protected void handleCopydata(CopyData data) {
     currentDataRow = data;
   }
 }

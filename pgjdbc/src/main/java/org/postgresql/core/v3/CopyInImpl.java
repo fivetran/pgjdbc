@@ -5,6 +5,7 @@
 
 package org.postgresql.core.v3;
 
+import org.postgresql.copy.CopyData;
 import org.postgresql.copy.CopyIn;
 import org.postgresql.util.ByteStreamWriter;
 import org.postgresql.util.GT;
@@ -49,7 +50,7 @@ public class CopyInImpl extends CopyOperationImpl implements CopyIn {
     return getQueryExecutor().endCopy(this);
   }
 
-  protected void handleCopydata(byte[] data) throws PSQLException {
+  protected void handleCopydata(CopyData data) throws PSQLException {
     throw new PSQLException(GT.tr("CopyIn copy direction can't receive data"),
         PSQLState.PROTOCOL_VIOLATION);
   }

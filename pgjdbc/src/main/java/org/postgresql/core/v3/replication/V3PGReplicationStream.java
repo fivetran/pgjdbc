@@ -5,6 +5,7 @@
 
 package org.postgresql.core.v3.replication;
 
+import org.postgresql.copy.CopyData;
 import org.postgresql.copy.CopyDual;
 import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationStream;
@@ -24,6 +25,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class V3PGReplicationStream implements PGReplicationStream {
+  private static final int MAX_MESSAGE_SIZE = 250 * 1000 * 1000; // TODO inject with stream builder
 
   private static final Logger LOGGER = Logger.getLogger(V3PGReplicationStream.class.getName());
   public static final long POSTGRES_EPOCH_2000_01_01 = 946684800000L;
@@ -42,6 +44,7 @@ public class V3PGReplicationStream implements PGReplicationStream {
   private volatile LogSequenceNumber lastReceiveLSN = LogSequenceNumber.INVALID_LSN;
   private volatile LogSequenceNumber lastAppliedLSN = LogSequenceNumber.INVALID_LSN;
   private volatile LogSequenceNumber lastFlushedLSN = LogSequenceNumber.INVALID_LSN;
+  private volatile boolean lastMessageIsPartial = false;
 
   /**
    * @param copyDual         bidirectional copy protocol
@@ -122,15 +125,17 @@ public class V3PGReplicationStream implements PGReplicationStream {
     boolean updateStatusRequired = false;
     while (copyDual.isActive()) {
 
-      ByteBuffer buffer = receiveNextData(block);
+      CopyData copyData = receiveNextData(block);
 
       if (updateStatusRequired || isTimeUpdate()) {
         timeUpdateStatus();
       }
 
-      if (buffer == null) {
+      if (copyData == null) {
         return null;
       }
+
+      ByteBuffer buffer = ByteBuffer.wrap(copyData.getData());
 
       int code = buffer.get();
 
@@ -142,6 +147,7 @@ public class V3PGReplicationStream implements PGReplicationStream {
           break;
 
         case 'w': //XLogData
+          lastMessageIsPartial = copyData.isPartial();
           return processXLogData(buffer);
 
         default:
@@ -155,14 +161,9 @@ public class V3PGReplicationStream implements PGReplicationStream {
     return null;
   }
 
-  private @Nullable ByteBuffer receiveNextData(boolean block) throws SQLException {
+  private @Nullable CopyData receiveNextData(boolean block) throws SQLException {
     try {
-      byte[] message = copyDual.readFromCopy(block);
-      if (message != null) {
-        return ByteBuffer.wrap(message);
-      } else {
-        return null;
-      }
+      return copyDual.readCopyData(block, MAX_MESSAGE_SIZE);
     } catch (PSQLException e) { //todo maybe replace on thread sleep?
       if (e.getCause() instanceof SocketTimeoutException) {
         //signal for keep alive
@@ -286,5 +287,10 @@ public class V3PGReplicationStream implements PGReplicationStream {
     copyDual.endCopy();
 
     closeFlag = true;
+  }
+
+  @Override
+  public boolean messageIsPartial() {
+    return lastMessageIsPartial;
   }
 }
